@@ -60,6 +60,14 @@
                 app:singleSelection="false" />
         </LinearLayout>
 
+        <!-- 🔹 Shimmer effect for progress -->
+        <include layout="@layout/shimmer_progress"
+            android:id="@+id/shimmerInclude"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
         <!-- 🔹 Nhóm nút điều khiển -->
         <LinearLayout
             android:id="@+id/buttonsLayout"

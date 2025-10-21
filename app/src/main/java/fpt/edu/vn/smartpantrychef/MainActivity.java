@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
+import android.view.animation.AnimationUtils;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -20,7 +21,9 @@ import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.bumptech.glide.Glide;
+import com.facebook.shimmer.ShimmerFrameLayout;
 import com.google.android.material.chip.Chip;
+import com.google.android.material.snackbar.Snackbar;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.label.ImageLabel;
 import com.google.mlkit.vision.label.ImageLabeler;
@@ -30,6 +33,9 @@ import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 
 import fpt.edu.vn.smartpantrychef.databinding.ActivityMainBinding;
 
@@ -53,6 +59,7 @@ public class MainActivity extends AppCompatActivity {
 
     private MainViewModel viewModel;
     private List<String> detectedIngredients = new ArrayList<>();
+    private ShimmerFrameLayout shimmerLayout;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -149,15 +156,21 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 if (!detectedIngredients.isEmpty()) {
+                    if (!isNetworkAvailable()) {
+                        showError("Không có kết nối mạng. Vui lòng kiểm tra lại.");
+                        return;
+                    }
                     viewModel.getRecipes(detectedIngredients);
                 } else {
-                    Toast.makeText(this, "Chưa có nguyên liệu nào", Toast.LENGTH_SHORT).show();
+                    showError("Chưa có nguyên liệu nào");
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error collecting ingredients", e);
-                Toast.makeText(this, "Lỗi khi lấy nguyên liệu: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                showError("Lỗi khi lấy nguyên liệu: " + e.getMessage());
             }
         });
+
+        shimmerLayout = findViewById(R.id.shimmerLayout);
     }
 
     // Xử lý kết quả ảnh (từ camera hoặc thư viện)
@@ -168,15 +181,19 @@ public class MainActivity extends AppCompatActivity {
                 binding.tvEmptyState.setVisibility(View.GONE);
                 binding.cardPreview.setVisibility(View.VISIBLE);
                 binding.buttonsLayout.setVisibility(View.VISIBLE);
-                Glide.with(this).load(capturedBitmap).into(binding.ivImage);
-                Toast.makeText(this, "Đang phân tích ảnh...", Toast.LENGTH_SHORT).show();
+                binding.imageViewPreview.setImageBitmap(capturedBitmap);
+                binding.imageViewPreview.startAnimation(AnimationUtils.loadAnimation(this, R.anim.fade_in));
+                startShimmer();
+                showError("Đang phân tích ảnh...");
                 analyzeImage(capturedBitmap);
             } catch (Exception e) {
                 Log.e(TAG, "Error processing image result", e);
-                Toast.makeText(this, "Có lỗi xảy ra khi xử lý ảnh", Toast.LENGTH_SHORT).show();
+                showError("Có lỗi xảy ra khi xử lý ảnh: " + e.getMessage());
+                stopShimmer();
             }
         } else {
-            Toast.makeText(this, "Không nhận được ảnh", Toast.LENGTH_SHORT).show();
+            showError("Không nhận được ảnh");
+            stopShimmer();
         }
     }
 
@@ -233,40 +250,74 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    private void showError(String message) {
+        Snackbar snackbar = Snackbar.make(binding.getRoot(), message, Snackbar.LENGTH_LONG);
+        View sbView = snackbar.getView();
+        sbView.setBackgroundColor(0xFFD32F2F); // Red background
+        snackbar.setAction("Thử lại", v -> {
+            // Retry logic can be implemented here if needed
+        });
+        snackbar.show();
+    }
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (cm != null) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+                return nc != null && (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR));
+            } else {
+                android.net.NetworkInfo ni = cm.getActiveNetworkInfo();
+                return ni != null && ni.isConnected();
+            }
+        }
+        return false;
+    }
+
     // Phân tích ảnh bằng ML Kit
     private void analyzeImage(Bitmap bitmap) {
         if (bitmap == null) {
-            Toast.makeText(this, "Ảnh không hợp lệ", Toast.LENGTH_SHORT).show();
+            showError("Ảnh không hợp lệ");
+            stopShimmer();
             return;
         }
-        binding.progressBar.setVisibility(View.VISIBLE);
-        binding.btnFindRecipe.setVisibility(View.GONE);
+        binding.progressBar.setVisibility(View.GONE);
         binding.chipGroupIngredients.removeAllViews();
-
-        InputImage image = InputImage.fromBitmap(bitmap, 0);
-        labeler.process(image)
-                .addOnSuccessListener(labels -> {
-                    ArrayList<String> detectedIngredients = new ArrayList<>();
-                    for (ImageLabel label : labels) {
-                        if (label.getConfidence() > 0.6f) {
-                            String ingredient = label.getText();
-                            detectedIngredients.add(ingredient);
-                            addIngredientChip(ingredient);
+        try {
+            InputImage image = InputImage.fromBitmap(bitmap, 0);
+            labeler.process(image)
+                    .addOnSuccessListener(labels -> {
+                        ArrayList<String> detectedIngredients = new ArrayList<>();
+                        for (ImageLabel label : labels) {
+                            if (label.getConfidence() > 0.6f) {
+                                String ingredient = label.getText();
+                                detectedIngredients.add(ingredient);
+                                addIngredientChip(ingredient);
+                            }
                         }
-                    }
-                    binding.progressBar.setVisibility(View.GONE);
-                    if (!detectedIngredients.isEmpty()) {
-                        binding.layoutIngredientsSection.setVisibility(View.VISIBLE);
-                        binding.btnFindRecipe.setVisibility(View.VISIBLE);
-                    } else {
-                        Toast.makeText(this, "Không phát hiện nguyên liệu nào", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    binding.progressBar.setVisibility(View.GONE);
-                    Log.e(TAG, "Image labeling failed", e);
-                    Toast.makeText(this, "Lỗi phân tích ảnh: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
+                        stopShimmer();
+                        if (!detectedIngredients.isEmpty()) {
+                            binding.layoutIngredientsSection.setVisibility(View.VISIBLE);
+                            binding.layoutIngredientsSection.startAnimation(AnimationUtils.loadAnimation(this, R.anim.slide_up));
+                            binding.btnFindRecipe.setVisibility(View.VISIBLE);
+                        } else {
+                            showError("Không phát hiện nguyên liệu nào");
+                        }
+                    })
+                    .addOnFailureListener(e -> {
+                        stopShimmer();
+                        Log.e(TAG, "Image labeling failed", e);
+                        showError("Lỗi phân tích ảnh: " + e.getMessage());
+                    });
+        } catch (IllegalArgumentException e) {
+            stopShimmer();
+            Log.e(TAG, "Invalid image for ML Kit", e);
+            showError("Ảnh không hợp lệ cho phân tích: " + e.getMessage());
+        } catch (Exception e) {
+            stopShimmer();
+            Log.e(TAG, "Unexpected error in analyzeImage", e);
+            showError("Lỗi không xác định khi phân tích ảnh: " + e.getMessage());
+        }
     }
 
     // Thêm chip nguyên liệu vào ChipGroup
@@ -274,8 +325,29 @@ public class MainActivity extends AppCompatActivity {
         Chip chip = new Chip(this);
         chip.setText(ingredient);
         chip.setCloseIconVisible(true);
-        chip.setOnCloseIconClickListener(v -> binding.chipGroupIngredients.removeView(chip));
+        chip.setOnCloseIconClickListener(v -> {
+            chip.startAnimation(AnimationUtils.loadAnimation(this, R.anim.chip_scale_in));
+            binding.chipGroupIngredients.removeView(chip);
+        });
+        chip.setBackgroundResource(R.drawable.chip_ripple);
+        chip.startAnimation(AnimationUtils.loadAnimation(this, R.anim.chip_scale_in));
         binding.chipGroupIngredients.addView(chip);
+    }
+
+    private void startShimmer() {
+        if (shimmerLayout != null) {
+            shimmerLayout.setVisibility(View.VISIBLE);
+            shimmerLayout.startShimmer();
+        }
+        binding.progressBar.setVisibility(View.GONE);
+    }
+
+    private void stopShimmer() {
+        if (shimmerLayout != null) {
+            shimmerLayout.stopShimmer();
+            shimmerLayout.setVisibility(View.GONE);
+        }
+        binding.progressBar.setVisibility(View.GONE);
     }
 
     @Override
