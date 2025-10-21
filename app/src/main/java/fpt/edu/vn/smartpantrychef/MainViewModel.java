@@ -1,6 +1,7 @@
 package fpt.edu.vn.smartpantrychef;
 
 import android.app.Application;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.lifecycle.AndroidViewModel;
@@ -16,26 +17,26 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.util.List;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 public class MainViewModel extends AndroidViewModel {
 
-    // TODO: Add your Gemini API key here. Get one from https://ai.google.dev/
-    private static final String API_KEY = "YOUR_API_KEY_HERE";
+    private static final String TAG = "MainViewModel";
+    private static final String API_KEY = "AIzaSyAAb-1TeJpIvdmILCaqu3zWas5IkG8Sh_Q";
 
     private final MutableLiveData<String> recipeResponse = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>();
     private final MutableLiveData<String> errorMessage = new MutableLiveData<>();
 
-    private final ExecutorService executorService;
+    private final Executor executor;
     private final GenerativeModelFutures model;
 
     public MainViewModel(@NonNull Application application) {
         super(application);
-        this.executorService = Executors.newSingleThreadExecutor();
+        executor = Executors.newSingleThreadExecutor();
 
-        // Initialize the Gemini model
+        // ✅ Khởi tạo model Gemini SDK 0.9.0
         GenerativeModel gm = new GenerativeModel("gemini-1.5-flash", API_KEY);
         model = GenerativeModelFutures.from(gm);
     }
@@ -52,47 +53,56 @@ public class MainViewModel extends AndroidViewModel {
         return errorMessage;
     }
 
+    // 🚀 Hàm gọi API (SDK 0.9.0)
     public void getRecipes(List<String> ingredients) {
         isLoading.postValue(true);
 
-        // Build the prompt
-        String prompt = "Bạn là đầu bếp chuyên nghiệp cho sinh viên. Đề xuất 2 công thức nấu ăn:\n" +
+        String prompt = "Bạn là đầu bếp chuyên nghiệp cho sinh viên. Hãy đề xuất 2 công thức nấu ăn:\n" +
                 "- Đơn giản, dễ làm dưới 20 phút\n" +
                 "- Chi phí thấp\n" +
                 "- Dùng nguyên liệu: " + ingredients.toString() + "\n\n" +
                 "Format:\nMón 1:\nNguyên liệu:\n- ...\nCách làm:\n1. ...";
 
-        Content content = new Content.Builder().addText(prompt).build();
+        Content content = new Content.Builder()
+                .addText(prompt)
+                .build();
 
-        // Call the Gemini API
+        // ✅ Sử dụng ListenableFuture (API mới)
         ListenableFuture<GenerateContentResponse> response = model.generateContent(content);
+
         Futures.addCallback(response, new FutureCallback<GenerateContentResponse>() {
             @Override
             public void onSuccess(GenerateContentResponse result) {
                 try {
                     String text = result.getText();
-                    if (text != null) {
-                        recipeResponse.postValue(text);
+
+                    if (text != null && !text.trim().isEmpty()) {
+                        recipeResponse.postValue(text.trim());
                     } else {
-                        errorMessage.postValue("Không nhận được nội dung từ API.");
+                        errorMessage.postValue("⚠️ Không nhận được nội dung hợp lệ từ Gemini.");
                     }
                 } catch (Exception e) {
+                    Log.e(TAG, "❌ Lỗi xử lý phản hồi Gemini", e);
                     errorMessage.postValue("Lỗi xử lý phản hồi: " + e.getMessage());
+                } finally {
+                    isLoading.postValue(false);
                 }
-                isLoading.postValue(false);
             }
 
             @Override
-            public void onFailure(Throwable t) {
+            public void onFailure(@NonNull Throwable t) {
+                Log.e(TAG, "❌ Lỗi gọi Gemini API", t);
                 errorMessage.postValue("Lỗi API: " + t.getMessage());
                 isLoading.postValue(false);
             }
-        }, executorService);
+        }, executor);
     }
 
     @Override
     protected void onCleared() {
         super.onCleared();
-        executorService.shutdown();
+        if (executor instanceof java.util.concurrent.ExecutorService) {
+            ((java.util.concurrent.ExecutorService) executor).shutdown();
+        }
     }
 }

@@ -10,6 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <!-- 🔹 Khung hiển thị ảnh chụp hoặc ảnh chọn -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardPreview"
             android:layout_width="match_parent"
@@ -18,19 +19,21 @@
             android:visibility="gone"
             app:cardCornerRadius="16dp"
             app:cardElevation="8dp"
-            app:layout_constraintBottom_toTopOf="@+id/layoutIngredientsSection"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/layoutIngredientsSection"
             app:layout_constraintVertical_chainStyle="packed">
 
             <ImageView
-                android:id="@+id/ivImage"
+                android:id="@+id/imageViewPreview"
                 android:layout_width="match_parent"
                 android:layout_height="250dp"
+                android:adjustViewBounds="true"
                 android:scaleType="centerCrop" />
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- 🔹 Khu vực hiển thị nguyên liệu phát hiện -->
         <LinearLayout
             android:id="@+id/layoutIngredientsSection"
             android:layout_width="match_parent"
@@ -38,50 +41,64 @@
             android:orientation="vertical"
             android:padding="16dp"
             android:visibility="gone"
-            app:layout_constraintTop_toBottomOf="@id/cardPreview">
+            app:layout_constraintTop_toBottomOf="@id/cardPreview"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Nguyên liệu phát hiện được:"
+                android:text="🥦 Nguyên liệu phát hiện được:"
                 android:textAppearance="?attr/textAppearanceTitleMedium" />
 
             <com.google.android.material.chip.ChipGroup
                 android:id="@+id/chipGroupIngredients"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="8dp"
+                app:singleLine="false"
+                app:singleSelection="false" />
         </LinearLayout>
 
+        <!-- 🔹 Nhóm nút điều khiển -->
         <LinearLayout
             android:id="@+id/buttonsLayout"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:gravity="center"
             android:padding="16dp"
-            android:visibility="gone"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent">
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnRetake"
+                android:id="@+id/btnScan"
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:text="Chụp lại" />
+                android:layout_marginEnd="8dp"
+                android:text="📷 Chụp ảnh" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnChooseFromGallery"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:text="🖼️ Chọn ảnh" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnFindRecipe"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:text="Tìm công thức" />
+                android:text="🍳 Tìm công thức" />
         </LinearLayout>
 
+        <!-- 🔹 Thanh tiến trình -->
         <ProgressBar
             android:id="@+id/progressBar"
             style="?android:attr/progressBarStyle"
@@ -89,25 +106,26 @@
             android:layout_height="wrap_content"
             android:indeterminateTint="?attr/colorPrimary"
             android:visibility="gone"
+            app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- 🔹 Trạng thái trống -->
         <TextView
             android:id="@+id/tvEmptyState"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="📷\n\nChụp ảnh tủ lạnh\nđể bắt đầu!"
+            android:text="📷\n\nChụp hoặc chọn ảnh tủ lạnh\nđể bắt đầu!"
             android:textAlignment="center"
             android:textColor="#757575"
             android:textSize="18sp"
             android:visibility="visible"
+            app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -1,11 +1,13 @@
 package fpt.edu.vn.smartpantrychef;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
-import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
@@ -23,13 +25,8 @@ import com.google.mlkit.vision.label.ImageLabel;
 import com.google.mlkit.vision.label.ImageLabeler;
 import com.google.mlkit.vision.label.ImageLabeling;
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
-import android.util.TypedValue;
-import android.view.ContextThemeWrapper;
-import android.view.ViewGroup;
 
-import com.google.android.material.chip.ChipGroup;
-import androidx.annotation.NonNull;
-
+import java.io.IOException;
 import java.util.ArrayList;
 
 import fpt.edu.vn.smartpantrychef.databinding.ActivityMainBinding;
@@ -41,8 +38,13 @@ public class MainActivity extends AppCompatActivity {
     private ActivityMainBinding binding;
     private Bitmap capturedBitmap;
 
-    private ActivityResultLauncher<String> requestPermissionLauncher;
+    // Trình khởi chạy yêu cầu quyền
+    private ActivityResultLauncher<String> requestCameraPermissionLauncher;
+    private ActivityResultLauncher<String> requestGalleryPermissionLauncher;
+
+    // Trình khởi chạy camera và thư viện
     private ActivityResultLauncher<Void> cameraLauncher;
+    private ActivityResultLauncher<Intent> galleryLauncher;
 
     // ML Kit Image Labeler
     private ImageLabeler labeler;
@@ -53,59 +55,75 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // Initialize ML Kit labeler
+        // Khởi tạo ML Kit labeler
         labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS);
 
-        requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+        // Khởi tạo trình khởi chạy yêu cầu quyền camera
+        requestCameraPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
             if (isGranted) {
                 Toast.makeText(this, "Quyền camera đã được cấp", Toast.LENGTH_SHORT).show();
                 openCamera();
             } else {
-                new AlertDialog.Builder(this)
-                        .setTitle("Yêu cầu quyền")
-                        .setMessage("Cần quyền camera để chụp ảnh nguyên liệu. Vui lòng cấp quyền trong cài đặt ứng dụng.")
-                        .setPositiveButton("OK", (dialog, which) -> dialog.dismiss())
-                        .create()
-                        .show();
+                showPermissionDeniedDialog("Cần quyền camera để chụp ảnh nguyên liệu.");
             }
         });
 
-        cameraLauncher = registerForActivityResult(new ActivityResultContracts.TakePicturePreview(), result -> {
-            if (result != null) {
+        // Khởi tạo trình khởi chạy yêu cầu quyền truy cập thư viện
+        requestGalleryPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+            if (isGranted) {
+                Toast.makeText(this, "Quyền truy cập thư viện đã được cấp", Toast.LENGTH_SHORT).show();
+                openGallery();
+            } else {
+                showPermissionDeniedDialog("Cần quyền truy cập thư viện để chọn ảnh.");
+            }
+        });
+
+        // Khởi tạo trình khởi chạy camera
+        cameraLauncher = registerForActivityResult(new ActivityResultContracts.TakePicturePreview(), this::handleImageResult);
+
+        // Khởi tạo trình khởi chạy thư viện
+        galleryLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                Uri imageUri = result.getData().getData();
                 try {
-                    capturedBitmap = result;
-                    if (binding != null) {
-                        binding.tvEmptyState.setVisibility(View.GONE);
-                        binding.cardPreview.setVisibility(View.VISIBLE);
-                        binding.buttonsLayout.setVisibility(View.VISIBLE);
-                        Glide.with(this).load(capturedBitmap).into(binding.ivImage);
-                    }
-                    Toast.makeText(this, "Đang phân tích ảnh...", Toast.LENGTH_SHORT).show();
-                    analyzeImage(capturedBitmap);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error processing captured image", e);
-                    Toast.makeText(this, "Có lỗi xảy ra khi xử lý ảnh", Toast.LENGTH_SHORT).show();
+                    Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
+                    handleImageResult(bitmap);
+                } catch (IOException e) {
+                    Log.e(TAG, "Error converting URI to Bitmap", e);
+                    Toast.makeText(this, "Không thể tải ảnh từ thư viện", Toast.LENGTH_SHORT).show();
                 }
             } else {
-                Toast.makeText(this, "Đã hủy chụp ảnh", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Đã hủy chọn ảnh", Toast.LENGTH_SHORT).show();
             }
         });
 
-        if (binding != null) {
-            binding.tvEmptyState.setOnClickListener(v -> openCamera());
-            binding.btnRetake.setOnClickListener(v -> openCamera());
-        }
+        // Thiết lập sự kiện click
+        binding.tvEmptyState.setOnClickListener(v -> openCamera());
+        binding.btnRetake.setOnClickListener(v -> openCamera());
+        binding.btnChooseFromGallery.setOnClickListener(v -> openGallery());
     }
 
-    private boolean checkCameraPermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            return true;
+    // Xử lý kết quả ảnh (từ camera hoặc thư viện)
+    private void handleImageResult(Bitmap bitmap) {
+        if (bitmap != null) {
+            try {
+                capturedBitmap = bitmap;
+                binding.tvEmptyState.setVisibility(View.GONE);
+                binding.cardPreview.setVisibility(View.VISIBLE);
+                binding.buttonsLayout.setVisibility(View.VISIBLE);
+                Glide.with(this).load(capturedBitmap).into(binding.ivImage);
+                Toast.makeText(this, "Đang phân tích ảnh...", Toast.LENGTH_SHORT).show();
+                analyzeImage(capturedBitmap);
+            } catch (Exception e) {
+                Log.e(TAG, "Error processing image result", e);
+                Toast.makeText(this, "Có lỗi xảy ra khi xử lý ảnh", Toast.LENGTH_SHORT).show();
+            }
         } else {
-            requestPermissionLauncher.launch(Manifest.permission.CAMERA);
-            return false;
+            Toast.makeText(this, "Không nhận được ảnh", Toast.LENGTH_SHORT).show();
         }
     }
 
+    // Kiểm tra và yêu cầu quyền truy cập camera
     private void openCamera() {
         if (checkCameraPermission()) {
             try {
@@ -117,128 +135,89 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * Analyze the provided bitmap using ML Kit Image Labeling.
-     * Shows progress, clears previous chips, creates outline chips for detected labels
-     * with confidence > 0.6, and updates UI accordingly.
-     */
+    // Kiểm tra và yêu cầu quyền truy cập thư viện
+    private void openGallery() {
+        if (checkGalleryPermission()) {
+            Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            galleryLauncher.launch(intent);
+        }
+    }
+
+    // Kiểm tra quyền truy cập camera
+    private boolean checkCameraPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            return true;
+        } else {
+            requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+            return false;
+        }
+    }
+
+    // Kiểm tra quyền truy cập thư viện
+    private boolean checkGalleryPermission() {
+        String permission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ?
+                Manifest.permission.READ_MEDIA_IMAGES : Manifest.permission.READ_EXTERNAL_STORAGE;
+
+        if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) {
+            return true;
+        } else {
+            requestGalleryPermissionLauncher.launch(permission);
+            return false;
+        }
+    }
+
+    // Hiển thị hộp thoại khi quyền bị từ chối
+    private void showPermissionDeniedDialog(String message) {
+        new AlertDialog.Builder(this)
+                .setTitle("Yêu cầu quyền")
+                .setMessage(message + " Vui lòng cấp quyền trong cài đặt ứng dụng.")
+                .setPositiveButton("OK", (dialog, which) -> dialog.dismiss())
+                .create()
+                .show();
+    }
+
+    // Phân tích ảnh bằng ML Kit
     private void analyzeImage(Bitmap bitmap) {
-        if (binding == null) return;
         if (bitmap == null) {
             Toast.makeText(this, "Ảnh không hợp lệ", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (labeler == null) {
-            labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS);
-        }
+        binding.progressBar.setVisibility(View.VISIBLE);
+        binding.btnFindRecipe.setVisibility(View.GONE);
+        binding.chipGroupIngredients.removeAllViews();
 
-        // Show progress, hide find button, clear previous chips
-        if (binding.progressBar != null) binding.progressBar.setVisibility(View.VISIBLE);
-        if (binding.btnFindRecipe != null) binding.btnFindRecipe.setVisibility(View.GONE);
-        if (binding.chipGroupIngredients != null) binding.chipGroupIngredients.removeAllViews();
-
-        InputImage image;
-        try {
-            image = InputImage.fromBitmap(bitmap, 0);
-        } catch (Exception e) {
-            if (binding.progressBar != null) binding.progressBar.setVisibility(View.GONE);
-            Toast.makeText(this, "Không thể tạo InputImage: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            Log.e(TAG, "InputImage creation failed", e);
-            return;
-        }
-
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
         labeler.process(image)
                 .addOnSuccessListener(labels -> {
                     ArrayList<String> detectedIngredients = new ArrayList<>();
-                    if (labels != null) {
-                        for (ImageLabel label : labels) {
-                            if (label == null) continue;
-                            float confidence = label.getConfidence();
-                            String text = label.getText();
-                            if (text == null || text.trim().isEmpty()) continue;
-                            if (confidence > 0.6f) {
-                                // Create Chip using helper to apply Material3 suggestion style, padding and margins
-                                Chip chip = createIngredientChip(text);
-                                // Remove chip and its entry from the detected list when closed
-                                final String chipText = text;
-                                chip.setOnCloseIconClickListener(v -> {
-                                    if (binding.chipGroupIngredients != null) {
-                                        binding.chipGroupIngredients.removeView(chip);
-                                    }
-                                    detectedIngredients.remove(chipText);
-                                });
-                                if (binding.chipGroupIngredients != null) {
-                                    binding.chipGroupIngredients.addView(chip);
-                                }
-                                detectedIngredients.add(text);
-                            }
+                    for (ImageLabel label : labels) {
+                        if (label.getConfidence() > 0.6f) {
+                            String ingredient = label.getText();
+                            detectedIngredients.add(ingredient);
+                            addIngredientChip(ingredient);
                         }
                     }
-
-                    if (detectedIngredients.size() > 0) {
-                        if (binding.layoutIngredientsSection != null) binding.layoutIngredientsSection.setVisibility(View.VISIBLE);
-                        if (binding.btnFindRecipe != null) binding.btnFindRecipe.setVisibility(View.VISIBLE);
-                        if (binding.progressBar != null) binding.progressBar.setVisibility(View.GONE);
+                    binding.progressBar.setVisibility(View.GONE);
+                    if (!detectedIngredients.isEmpty()) {
+                        binding.layoutIngredientsSection.setVisibility(View.VISIBLE);
+                        binding.btnFindRecipe.setVisibility(View.VISIBLE);
                     } else {
-                        if (binding.progressBar != null) binding.progressBar.setVisibility(View.GONE);
                         Toast.makeText(this, "Không phát hiện nguyên liệu nào", Toast.LENGTH_SHORT).show();
                     }
                 })
                 .addOnFailureListener(e -> {
-                    if (binding.progressBar != null) binding.progressBar.setVisibility(View.GONE);
-                    Toast.makeText(this, "Lỗi phân tích ảnh: " + (e == null ? "unknown" : e.getMessage()), Toast.LENGTH_SHORT).show();
+                    binding.progressBar.setVisibility(View.GONE);
                     Log.e(TAG, "Image labeling failed", e);
+                    Toast.makeText(this, "Lỗi phân tích ảnh: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
     }
 
-    /**
-     * Helper to create a Material Design 3 suggestion Chip programmatically.
-     * - Applies style @style/Widget.Material3.Chip.Suggestion via ContextThemeWrapper
-     * - Sets text, close icon, padding (8dp) and margins
-     */
-    private Chip createIngredientChip(@NonNull String text) {
-        // Protect against null/empty
-        if (text == null) text = "";
-
-        // Use the Material3 suggestion chip style; ensure this style exists in your styles.xml
-        ContextThemeWrapper themedContext;
-        try {
-            themedContext = new ContextThemeWrapper(this, R.style.Widget_Material3_Chip_Suggestion);
-        } catch (Exception e) {
-            // Fallback to activity context if style is missing
-            themedContext = new ContextThemeWrapper(this, android.R.style.Widget);
-        }
-
-        Chip chip = new Chip(themedContext);
-        chip.setText(text);
+    // Thêm chip nguyên liệu vào ChipGroup
+    private void addIngredientChip(String ingredient) {
+        Chip chip = new Chip(this);
+        chip.setText(ingredient);
         chip.setCloseIconVisible(true);
-        chip.setClickable(false);
-        chip.setCheckable(false);
-
-        // 8dp padding
-        int paddingDp = 8;
-        int paddingPx = (int) TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                paddingDp,
-                getResources().getDisplayMetrics()
-        );
-        chip.setPadding(paddingPx, paddingPx, paddingPx, paddingPx);
-
-        // Margins (use small spacing between chips)
-        int marginDp = 4;
-        int marginPx = (int) TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                marginDp,
-                getResources().getDisplayMetrics()
-        );
-        ChipGroup.LayoutParams lp = new ChipGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        lp.setMargins(marginPx, marginPx, marginPx, marginPx);
-        chip.setLayoutParams(lp);
-
-        return chip;
+        chip.setOnCloseIconClickListener(v -> binding.chipGroupIngredients.removeView(chip));
+        binding.chipGroupIngredients.addView(chip);
     }
-
 }

@@ -30,40 +30,56 @@ android {
             )
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    packaging {
+        resources {
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/LICENSE"
+            excludes += "META-INF/LICENSE.txt"
+            excludes += "META-INF/license.txt"
+            excludes += "META-INF/NOTICE"
+            excludes += "META-INF/NOTICE.txt"
+            excludes += "META-INF/notice.txt"
+            excludes += "META-INF/INDEX.LIST"
+        }
     }
 }
 
 dependencies {
+    // ✅ Gemini SDK (version ổn định)
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+
+    // ✅ Reactive Streams (cần cho Gemini SDK)
+    implementation("org.reactivestreams:reactive-streams:1.0.4")
+
+    // ✅ Kotlin Coroutines (cần cho async operations)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
     // CameraX
     implementation("androidx.camera:camera-core:1.3.0")
     implementation("androidx.camera:camera-camera2:1.3.0")
     implementation("androidx.camera:camera-lifecycle:1.3.0")
 
-    // ML Kit Image Labeling
+    // ML Kit
     implementation("com.google.mlkit:image-labeling:17.0.9")
-
-    // Gemini
-    implementation("com.google.ai.client.generativeai:generativeai:0.1.2")
-    implementation("com.google.ai.client.generativeai:generativeai-java:0.1.2")
+    implementation("com.google.guava:guava:32.1.2-android") // ⚠️ Đổi sang -android
 
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.9.4")
     implementation("androidx.lifecycle:lifecycle-livedata:2.9.4")
 
-    // Material Design 3
+    // Material Design
     implementation("com.google.android.material:material:1.13.0")
 
     // Glide
     implementation("com.github.bumptech.glide:glide:4.16.0")
     annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
-
-    // Activity and Fragment
-    implementation("androidx.activity:activity:1.11.0")
-    implementation("androidx.fragment:fragment:1.8.9")
 
     implementation(libs.appcompat)
     implementation(libs.constraintlayout)
