@@ -20,7 +20,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProvider;
 
-import com.bumptech.glide.Glide;
 import com.facebook.shimmer.ShimmerFrameLayout;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.snackbar.Snackbar;
@@ -141,7 +140,6 @@ public class MainActivity extends AppCompatActivity {
 
         // Thiết lập sự kiện click
         binding.tvEmptyState.setOnClickListener(v -> openCamera());
-        binding.btnRetake.setOnClickListener(v -> openCamera());
         binding.btnChooseFromGallery.setOnClickListener(v -> openGallery());
         binding.btnFindRecipe.setOnClickListener(v -> {
             try {
@@ -268,7 +266,7 @@ public class MainActivity extends AppCompatActivity {
                 return nc != null && (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR));
             } else {
                 android.net.NetworkInfo ni = cm.getActiveNetworkInfo();
-                return ni != null && ni.isConnected();
+                return ni != null && ni.isConnectedOrConnecting(); // Sử dụng isConnectedOrConnecting thay cho isConnected
             }
         }
         return false;
@@ -336,16 +334,24 @@ public class MainActivity extends AppCompatActivity {
 
     private void startShimmer() {
         if (shimmerLayout != null) {
-            shimmerLayout.setVisibility(View.VISIBLE);
-            shimmerLayout.startShimmer();
+            try {
+                shimmerLayout.setVisibility(View.VISIBLE);
+                shimmerLayout.startShimmer();
+            } catch (Exception e) {
+                Log.e(TAG, "Shimmer error", e);
+            }
         }
         binding.progressBar.setVisibility(View.GONE);
     }
 
     private void stopShimmer() {
         if (shimmerLayout != null) {
-            shimmerLayout.stopShimmer();
-            shimmerLayout.setVisibility(View.GONE);
+            try {
+                shimmerLayout.stopShimmer();
+                shimmerLayout.setVisibility(View.GONE);
+            } catch (Exception e) {
+                Log.e(TAG, "Shimmer error", e);
+            }
         }
         binding.progressBar.setVisibility(View.GONE);
     }
@@ -357,3 +363,7 @@ public class MainActivity extends AppCompatActivity {
         // Example: labeler.close(); if labeler implements Closeable
     }
 }
+
+// HƯỚNG DẪN: Thêm vào build.gradle (Module: app):
+// implementation 'com.facebook.shimmer:shimmer:0.5.0'
+// Sau đó Sync lại Gradle để sử dụng ShimmerFrameLayout
