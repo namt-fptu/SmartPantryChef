@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.lifecycle.ViewModelProvider;
 
 import com.bumptech.glide.Glide;
 import com.google.android.material.chip.Chip;
@@ -28,6 +29,7 @@ import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
 import fpt.edu.vn.smartpantrychef.databinding.ActivityMainBinding;
 
@@ -48,6 +50,9 @@ public class MainActivity extends AppCompatActivity {
 
     // ML Kit Image Labeler
     private ImageLabeler labeler;
+
+    private MainViewModel viewModel;
+    private List<String> detectedIngredients = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -97,10 +102,62 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // Initialize ViewModel
+        viewModel = new ViewModelProvider(this).get(MainViewModel.class);
+
+        // Observe isLoading LiveData
+        viewModel.getIsLoading().observe(this, isLoading -> {
+            if (isLoading != null && isLoading) {
+                binding.progressBar.setVisibility(View.VISIBLE);
+                binding.btnFindRecipe.setEnabled(false);
+            } else {
+                binding.progressBar.setVisibility(View.GONE);
+                binding.btnFindRecipe.setEnabled(true);
+            }
+        });
+
+        // Observe recipeResponse LiveData
+        viewModel.getRecipeResponse().observe(this, recipe -> {
+            if (recipe != null && !recipe.isEmpty()) {
+                Intent intent = new Intent(MainActivity.this, RecipeActivity.class);
+                intent.putExtra("RECIPE_TEXT", recipe);
+                startActivity(intent);
+            }
+        });
+
+        // Observe errorMessage LiveData
+        viewModel.getErrorMessage().observe(this, error -> {
+            if (error != null) {
+                Toast.makeText(this, "Lỗi: " + error, Toast.LENGTH_LONG).show();
+            }
+        });
+
         // Thiết lập sự kiện click
         binding.tvEmptyState.setOnClickListener(v -> openCamera());
         binding.btnRetake.setOnClickListener(v -> openCamera());
         binding.btnChooseFromGallery.setOnClickListener(v -> openGallery());
+        binding.btnFindRecipe.setOnClickListener(v -> {
+            try {
+                detectedIngredients.clear();
+                for (int i = 0; i < binding.chipGroupIngredients.getChildCount(); i++) {
+                    View chipView = binding.chipGroupIngredients.getChildAt(i);
+                    if (chipView instanceof Chip) {
+                        CharSequence text = ((Chip) chipView).getText();
+                        if (text != null && !text.toString().trim().isEmpty()) {
+                            detectedIngredients.add(text.toString().trim());
+                        }
+                    }
+                }
+                if (!detectedIngredients.isEmpty()) {
+                    viewModel.getRecipes(detectedIngredients);
+                } else {
+                    Toast.makeText(this, "Chưa có nguyên liệu nào", Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error collecting ingredients", e);
+                Toast.makeText(this, "Lỗi khi lấy nguyên liệu: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     // Xử lý kết quả ảnh (từ camera hoặc thư viện)
@@ -219,5 +276,12 @@ public class MainActivity extends AppCompatActivity {
         chip.setCloseIconVisible(true);
         chip.setOnCloseIconClickListener(v -> binding.chipGroupIngredients.removeView(chip));
         binding.chipGroupIngredients.addView(chip);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Clean up resources if needed
+        // Example: labeler.close(); if labeler implements Closeable
     }
 }
