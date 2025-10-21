@@ -48,6 +48,7 @@ dependencies {
 
     // Gemini
     implementation("com.google.ai.client.generativeai:generativeai:0.1.2")
+    implementation("com.google.ai.client.generativeai:generativeai-java:0.1.2")
 
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.9.4")
@@ -69,7 +70,4 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
-
-    // Material Components for Android
-    implementation("com.google.android.material:material:1.9.0")
 }
